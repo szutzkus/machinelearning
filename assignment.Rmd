@@ -1,0 +1,78 @@
+---
+title: "08-Machine-Learning-Assignment"
+output: html_document
+---
+
+## Introduction
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, the goal is to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: <http://groupware.les.inf.puc-rio.br/har> (see the section on the Weight Lifting Exercise Dataset). 
+
+The goal of this project is to predict the manner in which the 6 participants did the exercise. This is the "classe" variable in the training set.
+
+## Data and preprocessing
+
+```{r}
+library(lattice); library(ggplot2); library(caret)
+
+data <- read.csv("pml-training.csv", header=TRUE)
+summary(data$classe)
+```
+
+The classe distribution of the overall data is shown here:
+
+```{r, echo=FALSE}
+barplot(height=table(data$classe))
+```
+
+During prepocessing, all variables containing NAs are removed. In a second step, variables with near zero variance are removed, as well as the first variables containing only structural information (e.g. user name and timestaps)
+
+```{r}
+print(dim(data))
+bad <- sapply(data, function(x) any(is.na(x)))
+data <- data[,!bad]
+print(dim(data))
+
+nearzeros <- nearZeroVar(data,saveMetrics=TRUE)
+data <- data[,!(nearzeros$nzv)]
+data <- data[,-c(1:6)]
+```
+
+Finally, all variables not containing numeric values are removed. The remaining values are centered and scaled for the benefit of the model fitting. The reason for this preprocessing is the fact that different methods for machine-learning are not able to handle NA values. For the purpose of centering and scaling, all variables have to be numeric. Variables with near zero variance are not able to predict the outcome very well, so I reduce the input by removing these variables.
+
+```{r}
+nums <- sapply(data, function(x) all(is.numeric(x)))
+preObj <- preProcess (data[,nums],method= c ("center","scale"))
+```
+
+## K-fold cross validation with rpart2
+
+For the purpose of cross-validation, a k-fold approach is used. The data is split in 10 folds for calculation of the mean accuracy. The model is trained using rpart2 for a decission tree model. The trained model is then applied to the testing data and a confusion matrix is generated for calculation of accuracy. 
+
+As one can see, the accuracy is about 56 per cent, the "in sample" error beeing 44 per cent. I assume the "out of sample" error to be worse, so I assume an accuracy of about 50 per cent and an "out of sample" error of 50 per cent as well. [As I have seen in the second part of the assignment, I was able to predict 8 of 20 test cases right, so the out of sample error for this test set is 60 per cent.] 
+
+```{r}
+# First: k-fold
+train_control <- trainControl(method="cv", number=10)
+model <- train(classe~., data=data, trControl=train_control, method="rpart2")
+predictions <- predict(model, data)
+m <- confusionMatrix(predictions, data$classe)
+print(m)
+```
+
+## Prediction
+
+Finally, the trained model is used for prediction of the classe variable for the testing data.
+
+```{r}
+data <- read.csv("pml-testing.csv", header=TRUE)
+predictionsfinal <- predict(model, data)
+print(predictionsfinal)
+
+```
+
+The distribution of the classe variable in the testing data is shown in this plot.
+
+```{r, echo=FALSE}
+barplot(height=table(predictionsfinal))
+```
+
